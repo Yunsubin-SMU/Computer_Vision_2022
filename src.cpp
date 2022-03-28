@@ -87,10 +87,10 @@ void HistogramEqualization(BYTE* Img, BYTE* Out, int* AHisto, int W, int H) {
 	double Ratio = Gmax / (double)Nt;
 	BYTE NormSum[256];
 	for (int i = 0; i < 256; i++) {
-		NormSum[i] = (BYTE)(Ratio * AHisto[i]);
+		NormSum[i] = (BYTE)(Ratio * AHisto[i]);// 정규화합 히스토그램
 	}
 	for (int i = 0; i < ImgSize; i++) {
-		Out[i] = NormSum[Img[i]];
+		Out[i] = NormSum[Img[i]]; //정규화합 히스토그램을 이용하여 입력영상을 다시 매핑
 	}
 }
 
@@ -101,9 +101,66 @@ void Binarization(BYTE* Img, BYTE* Out, int W, int H, BYTE Threshold) {
 		else Out[i] = 255;
 	}
 }
+// 자동 임계치 결정 방법 구현 //
+int GonzalezBinThresh(int* Histo) {
+	int error = 3; // 미리 정의된 오차
+	BYTE Low, High; // 영상에서 밝기의 최소값과 최대값 
 
-int GonzalesBinThresh() { // 자동 임계치 결정 방법 구현 //
+	for (int i = 0; i < 256; i++)
+	{
+		if (Histo[i] != 0) {
+			Low = i;
+			break;
+		}
+	}
+	for (int i = 255; i >= 0; i--)
+	{
+		if (Histo[i] != 0) {
+			High = i;
+			break;
+		}
+	}
+	int G1_num, G2_num, G1, G2, T;
+	double avg_G1, avg_G2;
+	int estimated_T = (int)((Low + High) / 2); // 경계값 T의 추정값
+	printf("초기임계값: %d\n", estimated_T);
+	T = estimated_T;
 
+	do { // 경계 값의 변화가 미리 정의된 오차보다 작을 때까지 반복
+		// 경계값 T로 이진화
+		G1_num = 0, G2_num = 0;
+		G1 = 0, G2 = 0;
+
+		for (int i = Low; i < T; i++) {
+			// 밝기값이 T보다 작은 화소들로 구성된 영역(G2)
+			G2 += i * Histo[i];
+			G2_num += Histo[i];
+		}
+		for (int i = T + 1; i <= High; i++) {
+			// 밝기값이 T보다 큰 화소들로 구성된 영역(G1)
+			G1 += i * Histo[i];
+			G1_num += Histo[i];
+		}
+		avg_G1 = G1 / (double)G1_num;
+		avg_G2 = G2 / (double)G2_num;
+		T = (int)((avg_G1 + avg_G2) / 2);
+		if (abs(T - estimated_T) <= error) {
+			break;
+		}
+		estimated_T = T;
+	} while (1);
+
+	printf("임계값: %d\n", T);
+	return T;
+}
+void SaveBMPFile(BITMAPFILEHEADER hf, BITMAPINFOHEADER hInfo, 
+	RGBQUAD* hRGB, BYTE* Output, int W, int H, const char* FileName) {
+	FILE* fp = fopen(FileName, "wb");
+	fwrite(&hf, sizeof(BYTE), sizeof(BITMAPFILEHEADER), fp); // 기록 
+	fwrite(&hInfo, sizeof(BYTE), sizeof(BITMAPINFOHEADER), fp);
+	fwrite(hRGB, sizeof(RGBQUAD), 256, fp);
+	fwrite(Output, sizeof(BYTE), W*H, fp);
+	fclose(fp); 
 }
 void main()
 {
@@ -111,7 +168,7 @@ void main()
 	BITMAPINFOHEADER hInfo; // BMP 인포헤더 40Bytes
 	RGBQUAD hRGB[256]; // 팔레트 (256 * 4Bytes)
 	FILE* fp;
-	fp = fopen("coin.bmp", "rb"); // 바이너리 파일 형태로 열어서 읽기 
+	fp = fopen("lenna.bmp", "rb"); // 바이너리 파일 형태로 열어서 읽기 
 								   // 파일의 첫번째 주소 반환
 	if (fp == NULL) return; // 프로그램 종료. 
 	fread(&hf, sizeof(BITMAPFILEHEADER), 1, fp); // hf 주소, 두번째 파라미터 크기만큼 1바이트 번 불러온다.
@@ -137,56 +194,30 @@ void main()
 
 	
 
-	/*ObtainHistogram(Image, Histo, hInfo.biWidth, hInfo.biHeight);
-	ObtainAHistogram(Histo, AHisto);
-	HistogramEqualization(Image, Output, AHisto, hInfo.biWidth, hInfo.biHeight);*/
+	//ObtainHistogram(Image, Histo, hInfo.biWidth, hInfo.biHeight);
+	//ObtainAHistogram(Histo, AHisto);
+	//HistogramEqualization(Image, Output, AHisto, hInfo.biWidth, hInfo.biHeight);
 	
 	//HistogramStretching(Image, Output, Histo, hInfo.biWidth, hInfo.biHeight);
-	int Thres = GonzalesBinThresh();
-
-	Binarization(Image, Output, hInfo.biWidth, hInfo.biHeight, Thres);
+	//int Thres = GonzalezBinThresh(Histo);
+	//Binarization(Image, Output, hInfo.biWidth, hInfo.biHeight, Thres);
 	
-	/* 영상처리 {
-
-	// Output1 - 원본
-	for (int i = 0; i < ImgSize; i++)
-		Output1[i] = Image[i]; 
 	
-	// Output2 - 원본 영상의 밝기값을 50만큼 증가
-	for (int i = 0; i < ImgSize; i++)
-		Output2[i] = Image[i] + 50; 
-
-	// Output3 - 영상반전
-	for (int i = 0; i < ImgSize; i++)
-		Output3[i] = 255 - Image[i]; // 역상. 3주차 과제*/
 
 	//InverseImage(Image, Output, hInfo.biWidth, hInfo.biHeight);
 	//BrightnessAdj(Image, Output, hInfo.biWidth, hInfo.biHeight, 70);
 	//ContrastAdj(Image, Output, hInfo.biWidth, hInfo.biHeight, 1.5);
-
-	fp = fopen("output_binarization.bmp", "wb"); 
-	fwrite(&hf, sizeof(BYTE), sizeof(BITMAPFILEHEADER), fp); // 기록 
-	fwrite(&hInfo, sizeof(BYTE), sizeof(BITMAPINFOHEADER), fp);
-	fwrite(hRGB, sizeof(RGBQUAD), 256, fp);
-	fwrite(Output, sizeof(BYTE), ImgSize, fp);
-	/*
-	fclose(fp);
-	fp = fopen("output2.bmp", "wb");
-	fwrite(&hf, sizeof(BYTE), sizeof(BITMAPFILEHEADER), fp); // 기록 
-	fwrite(&hInfo, sizeof(BYTE), sizeof(BITMAPINFOHEADER), fp);
-	fwrite(hRGB, sizeof(RGBQUAD), 256, fp);
-	fwrite(Output2, sizeof(BYTE), ImgSize, fp);
-	fclose(fp);
-
-	fp = fopen("output3.bmp", "wb");
-	fwrite(&hf, sizeof(BYTE), sizeof(BITMAPFILEHEADER), fp); // 기록 
-	fwrite(&hInfo, sizeof(BYTE), sizeof(BITMAPINFOHEADER), fp);
-	fwrite(hRGB, sizeof(RGBQUAD), 256, fp);
-	fwrite(Output3, sizeof(BYTE), ImgSize, fp);
-	fclose(fp);*/
+	
+	// Output1 - 원본
+	SaveBMPFile(hf, hInfo, hRGB, Image, hInfo.biWidth, hInfo.biHeight, "output1.bmp");
+	// Output2 - 원본 영상의 밝기값을 50만큼 증가
+	for (int i = 0; i < ImgSize; i++) Output[i] = Image[i]+ 50; 
+	SaveBMPFile(hf, hInfo, hRGB, Output, hInfo.biWidth, hInfo.biHeight, "output2.bmp");
+	// Output3 - 영상반전
+	for (int i = 0; i < ImgSize; i++) Output[i] = 255 - Image[i]; // 역상. 3주차 과제*/
+	SaveBMPFile(hf, hInfo, hRGB, Output, hInfo.biWidth, hInfo.biHeight, "output3.bmp");
+	
 	free(Image); // 동적할당한 이미지 파일 더이상 사용하지 않으므로 ..
 	// memory leak. 포인터와 heap 영역 끊어줌.
 	free(Output);
-	//free(Output2);
-	//free(Output3);
 }
